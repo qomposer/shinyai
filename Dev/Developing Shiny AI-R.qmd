@@ -1,0 +1,400 @@
+---
+title: "Shiny AI-R Notebook"
+format: html
+date: "May 13th, 2023"
+author: "Josh Greer"
+---
+
+# Structure options for handling openai api
+
+There is the API which we interact with through REST HTTP calls. We build up the interface to the API ourselves in R.
+
+There is the `openai` R package []().
+
+```{r}
+#library(openai)
+
+# Stru
+
+basic_list <- list(value_1='user', msg_1='first message');
+
+new_list <- list(value_2='system', msg_2='you are a bot');
+basic_list
+append(basic_list, new_list)
+
+container_list <- list()
+
+container_list
+
+append()
+
+
+container_list <- list()
+
+nlist1 <- list(role='system', content='You are an assistant')
+nlist2 <- list(role='user', content='What is the primary medications used to treat ADHD')
+
+container_list <- append(container_list, list(nlist1))
+container_list <- append(container_list, list(nlist2))
+
+container_list
+
+recursive_list_append <- function(inp_list, n_times) {
+    for (i in seq(n_times)) {
+        inp_list <- append(inp_list, inp_list);
+    }        
+    return(inp_list);
+}
+
+list_append <- function(first, list_of_lists) {
+    append(first, list_of_lists)
+}
+
+res <- list_append(container_list, list(nlist1, nlist2))
+
+res[[1]]
+recursive_list_append(nlist1, 2) 
+
+(list(nlist1, nlist2))
+
+append(nlist1, nlist2)
+
+flatten_list <- function(anchor, containers) {
+    for (c in containers) {
+        anchor <- c(anchor, containers);
+    }
+    return(anchor);
+}
+
+container_list <- list()
+
+flatten_list(container_list, list(nlist1, nlist2))
+
+append(list(), list(list(a='a', b='b'), list(c='c', d='d')))
+
+somelist <- list(body='body', content='content')
+
+somelist[['a']] <- 'a'
+somelist[['b']] <- 'b'
+
+somelist
+
+message_params_1 <- list(
+    role='system',
+    content='blah blah',
+    role='user',
+    content='blah blah user'
+)
+message_params_1[['assistant']] <- 'hello assistant';
+message_params_1
+
+message_params_2 <- list(
+    list(
+        role='system',
+        content='blah'
+    ),
+    list(
+        role='user',
+        content='blah blah user'
+    )
+)
+message_params_2[['assistant']] <- 'assistant 2';
+message_params_2
+
+
+
+
+```
+
+
+## R6
+
+```{r}
+library(R6)
+
+BankAccount <- R6::R6Class("BankAccount",
+     private = list(
+         balance = 0,
+         adjust_balance = function(amount) {
+             private$balance <<- private$balance + amount;
+         }
+     ),
+     public = list(
+         deposit = function(amount) {
+             if (amount <= 0) {
+                 stop("Deposit amount must be positive.");
+             }
+             private$adjust_balance(amount);
+             invisible(self);
+         },
+         withdraw = function(amount) {
+             if (amount <= 0) {
+                 stop("Withdrawal amount must be positive.");
+             }
+             if (amount > private$balance) {
+                 stop("Insufficient funds");
+             }
+             private$adjust_balance(-amount);
+             invisible(self);
+         },
+         check_balance = function() {
+             private$balance;
+         }
+     )
+
+)
+
+
+TicTacToe <- R6Class("TicTacToe",
+     private = list(
+         mat00 = 0, mat01 = 0, mat10 = 0, mat11 = 0,
+         p_get_mat00 = function() {
+             return(private$mat00);
+         },
+         p_set_mat00 = function(value) {
+             private$mat00 <- value;
+         }
+     ),
+     
+     public = list(
+         get_mat00 = function() {
+             return(private$p_get_mat00());
+         },
+         set_mat00 = function(value) {
+             private$p_set_mat00(value);
+         }
+     )
+)
+
+Game <- TicTacToe$new();
+Game$set_mat00(1);
+
+Game
+
+value <- Game$get_mat00();
+value
+
+Game
+for (i in seq(20)) {
+    start_time <- Sys.time();
+    Game$set_mat00(1);
+    elapsed_time <- Sys.time() - start_time
+    print(paste("Iteration", i, "took", elapsed_time, "seconds."))
+}
+
+library(microbenchmark)
+
+
+loop_code <- expression({
+    for (n in seq(20)) {
+        Game$set_mat00(1);
+    }
+})
+result <- microbenchmark(loop_code)
+print(result)
+```
+
+
+
+```{r}
+library(openai)
+
+response <-  openai::create_chat_completion(
+    model='gpt-3.5-turbo',
+    messages=list(
+        list(
+            role='system',
+            content='you are an ai assistant'
+        ),
+        list(
+            role='user',
+            content='what are the primary medications used to treat adhd? are there supplements that can we can buy over the counter?'
+        )
+    ),
+    temperature=0.8,
+    frequency_penalty = 0,
+    presence_penalty = 0,
+    max_tokens = 3000
+)
+response$choices$message.content
+
+a = ''
+b = ''
+c = ''
+any(stringr::str_count(a), stringr::str_count(b), stringr::str_count(c))
+
+d = '2'
+e = '4'
+f = '5'
+any(stringr::str_count(d), stringr::str_count(e), stringr::str_count(f))
+
+any(is.null(a), b, c)
+
+```
+
+```{r}
+library(openai)
+library(R6)
+
+# messages: Messages takes a list of lists. Role can be System, User and Assistant
+# temperature: Sampling temp. min:0 max:2. Low=Focused and deterministic. High=Random.
+# presence_penalty: min:-2 max:2. Positive=penalize new tokens based on whether 
+#   they appear in the text so far. Increases likelihood of model
+#   discussing new topics.
+# frequency_penalty: min:-2 max:2. Positive=penalize new tokens based on their existing
+#   frequency in the text so far. Decreases likelihood of model.
+#   repeating the same line verbatim.
+ChatCompletion <- R6::R6Class("ChatCompletion",
+    private = list(
+        model = "gpt-3.5-turbo",
+        messages = list(
+            list('name'=NULL, 'role'='user','content'='say hi'),
+            list('name'=NULL, 'role'='system','content'='you are a bot'),
+            list('name'=NULL, 'role'='assistant','content'=NULL)),
+        temperature = 0.2,
+        max_tokens = 2048,
+        presence_penalty = 0,
+        frequency_penalty = 0,
+        
+        msg_envs = new.env(),
+        msg_system = "",
+        msg_user = "",
+        msg_assistant = "",
+        msg_container = list(),
+
+        pr_get_model = function() {
+            return(private$model)
+        },
+        pr_get_messages = function() {
+            return(private$messages)
+        },
+        pr_get_temperature = function() {
+            return(private$temperature)
+        },
+        pr_get_max_tokens = function() {
+            return(private$max_tokens)
+        },
+        pr_get_presence_penalty = function() {
+            return(private$presence_penalty)
+        },
+        pr_get_frequency_penalty = function() {
+            return(private$frequency_penalty)
+        },
+
+        pr_set_model = function(model) {
+            private$model <- model
+        },
+        pr_set_messages = function(msg_user='', msg_system='', msg_assistant='') {
+            # What we pass to the API
+            private$messages <- list(
+                list(
+                    role='system', content=msg_system
+                ),
+                list(
+                    role='user', content=msg_user
+                ),
+                list(role='assistant', content=msg_assistant)
+            )
+        },
+        pr_set_temperature = function(temperature) {
+            private$temperature <- temperature
+        },
+        pr_set_max_tokens = function(max_tokens) {
+            private$max_tokens <- max_tokens
+        },
+        pr_set_presence_penalty = function(presence_penalty) {
+            private$presence_penalty <- presence_penalty
+        },
+        pr_set_frequency_penalty = function(frequency_penalty) {
+            private$frequency_penalty <- frequency_penalty
+        },
+
+        pr_handle_input_msg = function(msg_user='', msg_system='', msg_assistant='') {
+            # Temp var
+            latest_msg <- list(
+                list(
+                    role='system', content=msg_system
+                ),
+                list(
+                    role='user', content=msg_user
+                ),
+                list(role='assistant', content=msg_assistant)
+            );
+            # Holds chat history??
+            append(private$msg_container, latest_msg);
+
+            # Message environment is used for ...???
+            private$msg_envs[["system"]] <- msg_system;
+            private$msg_envs[["user"]] <- msg_user;
+            private$msg_envs[["assistant"]] <- msg_assistant;
+            
+            # What we pass to the API
+            private$messages <- list(
+                list(
+                    role='system', content=msg_system
+                ),
+                list(
+                    role='user', content=msg_user
+                ),
+                list(role='assistant', content=msg_assistant)
+            )
+        },
+        pr_handle_output_msg = function(msg) {
+            append(private$msg_container, msg);
+            #private$messages <- append(private$messages, list(msg))
+            #return(msg$content)
+        }    
+    ),
+    public = list(
+        initialize = function(model, msg_user='', msg_system='', msg_assistant='', temperature=0.2, 
+        max_tokens=1000, presence_penalty=0, frequency_penalty=0) {
+            private$pr_set_model(model);
+            private$pr_set_messages(msg_user, msg_system, msg_assistant);
+            private$pr_set_temperature(temperature);
+            private$pr_set_max_tokens(max_tokens);
+            private$pr_set_presence_penalty(presence_penalty);
+            private$pr_set_frequency_penalty(frequency_penalty);
+        },
+        chat = function(msg_user='', msg_system='', msg_assistant='') {
+            if (any(
+                stringr::str_count(msg_user),
+                stringr::str_count(msg_system),
+                stringr::str_count(msg_assistant)) == FALSE) {
+                    response <- openai::create_chat_completion(
+                        model = private$pr_get_model(),
+                        messages = private$pr_get_messages(),
+                        temperature = private$pr_get_temperature(),
+                        max_tokens = private$pr_get_max_tokens(),
+                        presency_penalty = private$pr_get_presence_penalty(),
+                        frequency_penalty = private$pr_get_frequency_penalty()
+                    )
+                    return(response);
+            }
+            private$pr_handle_input_msg(msg_user, msg_system, msg_assistant);
+
+            response <- openai::create_chat_completion(
+                model = private$pr_get_model(),
+                messages = private$pr_get_messages(),
+                temperature = private$pr_get_temperature(),
+                max_tokens = private$pr_get_max_tokens(),
+                presency_penalty = private$pr_get_presence_penalty(),
+                frequency_penalty = private$pr_get_frequency_penalty()
+            )
+            return(response$choices$message.content);
+        }
+    )
+)
+
+
+```
+
+```{r}
+if (all(stringr::str_count(""),
+    stringr::str_count(""),
+    stringr::str_count("")) == FALSE) {
+    cat("all strings are empty")
+} else {
+    cat("all strings are not empty")
+}
+```
+

@@ -1,0 +1,262 @@
+---
+title: "Query OpenAI API"
+format: html
+editor: visual
+---
+
+## *Examples from OpenAI Documentation*
+
+```{bash}
+curl https://api.openai.com/v1/chat/completions \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer $OPENAI_API_KEY" \
+-d '{
+"model": "gpt-3.5-turbo",
+"messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"}]
+}'
+```
+
+```{json}
+{
+  "model": "gpt-3.5-turbo",
+  "messages": [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": "Hello!"}]
+}
+```   
+
+## *Load Packages*
+
+*I have already installed `{httr2}`, `{tidyverse}`, `{usethis}`, `{devtools}`, and `{gert}`. We won't use all of those here, but I usually enjoy hearing the tools others prefer to use for their own development.*
+
+```{r}
+library(httr2)
+library(magrittr)
+```
+
+## *API Query Function*
+
+```{r}
+
+
+build_message <- function(system_message = '', user_message = '', assistant_message = '') {
+  
+  system_list <- list(role='system', content = system_message)
+  user_list <- list(role='user', content = user_message)
+  assistant_list <- list(role='assistant', content = assistant_message)
+  final_list <- list(system_list, user_list, assistant_list)
+
+  return(final_list)
+}
+
+
+build_message(system_message = 'You are a helpful AI assistant.', 
+              user_message = 'Tell me a joke.',
+              assistant_message = "Alone was a boy who lived in a box. He stared at the screen but life didn't stop.")
+
+```
+
+
+```{r}
+
+smart <- "gpt-4-0613"
+fast_large <- "gpt-3.5-turbo-16k-0613"
+fast_small <- "gpt-3.5-turbo-0613"
+
+model_options <- c(smart=smart, fast_large=fast_large, fast_small=fast_small)
+
+"gpt-4-0613" %in% model_options
+
+validate_model_selection <- function(model_selection) {
+  final_model <- model_options['fast_small']
+  # Model options declared above
+  if ((model_selection %in% model_options) == FALSE) {
+    warning("Invalid model. Defaulting to gpt-3.5-turbo")
+  } else {
+    final_model <- model_selection
+  }
+  return(final_model)
+}
+
+out <- validate_model_selection("gpt-4-0613")
+
+out
+
+validate_temperature <- function(temperature) {
+  out_temp <- 0.0
+  is_numeric <- is.numeric(temperature)
+  if (is_numeric == TRUE && temperature >= 0 && temperature <= 1.0) {
+    out_temp <- temperature
+  } else {
+    warning("Temperature must be between 0.0 and 1.0. Defaulting to 0.0.")
+  }
+  return(out_temp)
+}
+
+validate_tokens_requested <- function(requested_tokens, model) {
+  out_tokens <- 2000
+  token_limit <- switch (model,
+    "gpt-4-0613" = 4000,
+    "gpt-3.5-turbo-16k-0613" = 16000,
+    "gpt-3.5-turbo-0613" = 2080,
+    2000
+  )
+  if (token_limit < requested_tokens) {
+    # Should really break
+    warning("Requested token amount is too large for this model. Defaulting to 2000 tokens.")
+    return(out_tokens)
+  }
+  return(requested_tokens)
+}
+validate_tokens_requested(299, "gpt-4-0613")
+result <- validate_temperature(20.)
+
+print(result)
+
+messages <- build_message(user_message="how to write a character string to a text file in R")
+
+# Returns a list
+build_request_body <- function(messages, model = "gpt-4-0613", temperature = 0.1, max_tokens = 2000) {
+  param_model <- validate_model_selection(model)
+  param_temperature <- validate_temperature(temperature)
+  param_max_tokens <- validate_tokens_requested(max_tokens, param_model)
+  body <- list(
+    model = param_model,
+    messages = messages,
+    temperature = param_temperature,
+    max_tokens = param_max_tokens
+  )
+  return(body)
+}
+
+request_body <- build_request_body(messages=messages, model="gpt-3.5-turbo-16k-0613", temperature=0.4, max_tokens=2800)
+#request_body['messages']
+
+base_url <- "https://api.openai.com/v1/chat/completions"
+api_key <- Sys.getenv("OPENAI_API_KEY")
+body <- request_body
+req <- request(base_url)
+resp <-
+    req %>%
+    req_auth_bearer_token(token = api_key) %>%
+    req_headers("Content-Type" = "application/json") %>% 
+    req_user_agent("Josh Greer @jgreer | Shiny AI in R") %>% 
+    req_body_json(body) %>%
+    req_retry(max_tries = 4) %>% 
+    req_throttle(rate = 15) %>%
+    req_perform()
+  
+openai_chat_response <- resp |> resp_body_json(simplifyVector = TRUE)
+
+r_write_to_txt <- openai_chat_response$choices$message$content
+r_write_to_txt
+
+joke# <- openai_chat_response$choices$message$content
+
+(joke)
+
+file_path <- "./joke_about_delusion.txt"
+writeLines(joke, file_path)
+
+```
+
+
+
+
+
+```{r}
+
+chat <- function(message) {
+  user_message <- list(list(role="system", content="you are an expert R programmer. Even for using R as a software tool for Shiny or other ways to use R for building complex programs with the tidyverse and native functional programming concepts."), list(role = "user", content = message))
+  base_url <- "https://api.openai.com/v1/chat/completions"
+  api_key <- Sys.getenv("OPENAI_API_KEY")
+  body <- list(model = "gpt-3.5-turbo",
+               messages = user_message,
+               temperature = 0.7, 
+               max_tokens = 3000)
+  req <- request(base_url)
+  resp <-
+    req %>%
+    req_auth_bearer_token(token = api_key) %>%
+    req_headers("Content-Type" = "application/json") %>% 
+    req_user_agent("Josh Greer @jgreer | Shiny AI in R") %>% 
+    req_body_json(body) %>%
+    req_retry(max_tries = 4) %>% 
+    req_throttle(rate = 15) %>%
+    req_perform()
+  
+    openai_chat_response <- resp |> resp_body_json(simplifyVector = TRUE)
+  
+  openai_chat_response$choices$message$content
+}
+```
+
+## *Test API*
+
+```{r}
+chat("How do you append a list to an existing list so that subset 1 of the resulting list is the first list, and subset 2 is the second list that was appended?")
+```
+
+
+```{r}
+
+f_list <- list(role='user', content='message1')
+g_list <- list(role='user', content='message2')
+
+
+list(list(), list())
+
+append(f_list, g_list)
+
+a_list <- list(list(role='user', content='message'))
+
+list(a_list, list(role='user', content='new_list'))
+
+list(list(role = "user", content = "message"), list(role = "system", content = "You are an R programming master"))
+```
+
+
+
+```{r}
+my_list <- list(list(role="user", content="message"))
+print(my_list)
+
+
+append(my_list, list(role="assistant", content="Certainly! There are two people. The second says, '99.99% of bacteria are killed by this sanitizer. That means, if I apply the sanitizer twice, I will kill all of the bacteria!'. What is wrong with this statement?"))
+
+my_list
+
+append(my_list, )
+
+```
+
+
+
+```{r}
+suppressMessages(suppressWarnings(
+    library(tidyverse)
+))
+
+text <- c("9=Excellent\n8=Very Good\n7=Somewhat Good")
+
+df <- str_split(text, "\n") %>%
+  unlist() %>%
+  { tibble(
+    A = str_extract(., "\\d+"),
+    B = str_extract(., "(?<=\\=).*")
+  ) }
+
+df
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
